@@ -18,57 +18,56 @@ TRIES = 2
 # We shall use the same packet that we built in the Ping exercise
 
 def checksum(string):
-    
-    #HELLO THERE, I'm finally commenting now: the skeleton code refers to another lab,
-    # the ping lab for this section of the code
-    #naturally i went to that portion and ripped it right out for us to use
+    # In this function we make the checksum of our packet 
+    string = bytearray(string)
     csum = 0
     countTo = (len(string) // 2) * 2
-    count = 0
 
-    while count < countTo:
-        thisVal = ord(string[count+1]) * 256 + ord(string[count])
+    for count in range(0, countTo, 2):
+        thisVal = string[count+1] * 256 + string[count]
         csum = csum + thisVal
         csum = csum & 0xffffffff
-        count = count + 2
 
     if countTo < len(string):
-        csum = csum + ord(string[len(string) - 1])
+        csum = csum + string[-1]
         csum = csum & 0xffffffff
+
     csum = (csum >> 16) + (csum & 0xffff)
     csum = csum + (csum >> 16)
-    
     answer = ~csum
     answer = answer & 0xffff
-
     answer = answer >> 8 | (answer << 8 & 0xff00)
     return answer
 #wow how easy
 
-def build_packet(mySocket,destAddr, ID):
-   #this section of the skeleton code also refers to the previous ping lab
-   #so I've based this def off of that lab's sendOnePing
+
+def build_packet():
+    # In the sendOnePing() method of the ICMP Ping exercise ,firstly the header of our
+    # packet to be sent was made, secondly the checksum was appended to the header and
+    # then finally the complete packet was sent to the destination.
+
+    # Make the header in a similar way to the ping exercise.
     myChecksum = 0
+    myID = os.getpid() & 0xFFFF
 
-    #foundation for assembling the packet
-    header = struct.pack("bbHHh",ICMP_ECHO_REQUEST,0,myChecksum,ID,1)
-    data = struct.pack("d",time.time())
-    #calc the checksum for the fake header and data
-    myChecksum= checksum(str(header+data))
+    # Make a dummy header with a 0 checksum.
+    # struct -- Interpret strings as packed binary data
+    header = struct.pack("bbHHh", ICMP_ECHO_REQUEST, 0, myChecksum, myID, 1)
+    #header = struct.pack("!HHHHH", ICMP_ECHO_REQUEST, 0, myChecksum, pid, 1)
+    data = struct.pack("d", time.time())
 
-    if sys.platform == 'darwin': ##I'll look this up at some point
-        
-        myChecksum = htons(myChecksum) & 0xffff
-
+    # Calculate the checksum on the data and the dummy header.
+    # Append checksum to the header.
+    myChecksum = checksum(header + data)    
+    if sys.platform == 'darwin':
+        myChecksum = socket.htons(myChecksum) & 0xffff
+        #Convert 16-bit integers from host to network byte order.
     else:
         myChecksum = htons(myChecksum)
 
-    header = struct.pack("bbHHh",ICMP_ECHO_REQUEST,0,myChecksum,ID,1)
-
+    header = struct.pack("bbHHh", ICMP_ECHO_REQUEST, 0, myChecksum, myID, 1)
     packet = header + data
     return packet
-    #pretty sure i don't have to modify the code from the ping lab
-    #but if i do it'll be updated accordingly
 
 def get_route(hostname):
     timeLeft = TIMEOUT
@@ -110,23 +109,25 @@ def get_route(hostname):
                 continue
 
             else:
+                icmpHeader = recvPacket[20:28]
+                type, code, checksum, packetID, sequence = struct.unpack("bbHHh", icmpHeader)
                 #Fill in start - second red section
                 # Fetch the icmp type from the IP packet
                 #Fill in end
 
-                if types == 11:
+                if type == 11:
                     bytes = struct.calcsize("d")
                     timeSent = struct.unpack("d", recvPacket[28:28 + bytes])[0]
                     print(" %d rtt=%.0f ms %s" % (ttl,
                           (timeReceived - t) * 1000, addr[0]))
 
-                elif types == 3:
+                elif type == 3:
                     bytes = struct.calcsize("d")
                     timeSent = struct.unpack("d", recvPacket[28:28 + bytes])[0]
                     print(" %d rtt=%.0f ms %s" % (ttl,
                           (timeReceived - t) * 1000, addr[0]))
 
-                elif types == 0:
+                elif type == 0:
                     bytes = struct.calcsize("d")
                     timeSent = struct.unpack("d", recvPacket[28:28 + bytes])[0]
                     print(" %d rtt=%.0f ms %s" % (ttl,
